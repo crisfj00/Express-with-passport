@@ -1,0 +1,21 @@
+doctype html
+html(lang="en")
+  head
+    title= 'Register'
+  body
+    p 
+     strong= 'Want to listen to the fortune-teller server?'
+    p Please register now to proceed
+    form(action="/register" method="POST")
+      p Username:
+        input(type="text" name="username" placeholder="")
+      p Password:
+        input(type="password" name="password" placeholder="")
+      p Confirm Password:
+        input(type="password" name="password_conf" placeholder="")
+      input(type="submit" value="Register")
+
+    form(action="/login")
+      input(type="submit" value="Login")
+    h3 #{message}
+ 

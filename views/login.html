@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+
+<style>
+a.button {
+    -webkit-appearance: button;
+    -moz-appearance: button;
+    appearance: button;
+
+    text-decoration: none;
+    color: initial;
+}
+</style>
+
+<body>
+    <p><strong>Want to listen to the fortune-teller server?</strong></p>
+    <p>Please login to proceed</p>
+    <form action="/login" method="post">  <!-- when the formulary is submitted, it will be POSTed to /login-->
+        <div>
+            <label>Username:</label>
+            <input type="text" name="username" />  <!-- the name MUST match the one defined in the local 'username-password' startegy -->
+        </div>
+        <div>
+            <label>Password:</label>
+            <input type="password" name="password" /> <!-- the name MUST match the one defined in the local 'username-password' startegy -->
+        </div>
+        <div>
+            <input type="submit" value="Log In" />
+        </div>
+    </form>
+<form action="/register">
+    <input type="submit" value="Register" />
+</form>
+
+<div class="container">
+    <div class="jumbotron text-center text-primary">
+        <h1><span class="fa fa-github"></span> Github OAuth</h1>
+        <p>Sign in with:</p>
+        <a href="/oauth/github" class="btn btn-danger"><span class="fa fa-github"></span> Github Login</a>
+    </div>
+    
+    <div class="jumbotron text-center text-primary">
+        <h1><span class="fa fa-github"></span> Google OpenID</h1>
+        <p>Sign in with:</p>
+        <a href="/oauth/google" class="btn btn-danger"><span class="fa fa-github"></span> Google UPC Login</a>
+    </div>
+</div>
+
+</body>
+
+</html>
