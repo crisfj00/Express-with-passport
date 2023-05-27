@@ -22,6 +22,22 @@ const salt = scryptPbkdf.salt(32)  // returns an ArrayBuffer filled with 16 rand
 const derivedKeyLength = 32  // in bytes
 const OpenIDConnectStrategy = require('passport-openidconnect').Strategy;
 const session = require('express-session');
+const RadClient = require('node-radius-client');
+const {
+  dictionaries: {
+    rfc2865: {
+      file,
+      attributes,
+    },
+  },
+} = require('node-radius-utils');
+const client = new RadClient({
+  host: '127.0.0.1',
+  dictionaries: [
+    file,
+  ],
+});
+
 const ScryptParams = { //strong
   N: 1048576,
   r: 8,
@@ -39,6 +55,11 @@ const httpsOptions = {
     cert: tlsServerCrt
 };
 
+const validateEmail = (email) => {
+  return email.match(
+    /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+  );
+};
 
 const server = https.createServer(httpsOptions, app);
 dotenv.config({ path: './.env'})
@@ -129,6 +150,9 @@ passport.use('username-password', new LocalStrategy(
   },
   function (username, password, done) {
   
+	if(validateEmail(username))
+	return done(null, false)
+
       db.query('SELECT name, password, salt FROM users WHERE name = ?', [username, password], async (error, res, fields) => {
         if(error){
             console.log(error)
@@ -155,8 +179,11 @@ passport.use('username-password', new LocalStrategy(
 				      }
 				      return done(null, user) // the first argument for done is the error, if any. In our case there is no error, and so we pass null. The object user will be added by the passport middleware to req.user and thus will be available there for the next middleware and/or the route handler 
 				    }
-				    else
-				    return done(null, false) 
+				    else{
+				      	
+
+				    
+				    return done(null, false) }
 				    // in passport returning false as the user object means that the authentication process failed. 
 
 			},function(error) { console.log(error) })
@@ -164,6 +191,7 @@ passport.use('username-password', new LocalStrategy(
 	 });
 		
         } else {
+
             return done(null, false)  
         }
         
@@ -171,6 +199,42 @@ passport.use('username-password', new LocalStrategy(
 
   }
 ))
+
+passport.use('radius-authenticate', new LocalStrategy(
+
+  {
+    usernameField: 'username',  // it MUST match the name of the input field for the username in the login HTML formulary
+    passwordField: 'password',  // it MUST match the name of the input field for the password in the login HTML formulary
+    session: false // we will store a JWT in the cookie with all the required session data. Our server does not need to keep a session, it's going to be stateless
+  },
+  function (username, password, done) {
+  
+  	if(validateEmail(username)){
+  
+  		  client.accessRequest({
+		  secret: process.env.RADIUS_SECRET,
+		  attributes: [
+		    [attributes.USER_NAME, username],
+		    [attributes.USER_PASSWORD, password],
+		  ],
+		}).then((result) => {
+		  console.log('result', result);
+		  if(result.code=='Access-Accept'){
+		      const user = { 
+			username: username,
+			description: 'the user that deserves to contact the fortune teller'
+		      }
+		      return done(null, user) // the first argument for done is the error, if any. In our case there is no error, and so we pass null. The object user will be added by the passport middleware to req.user and thus will be available there for the next middleware and/or the route handler 
+		  }
+		}).catch((error) => {
+		  console.log('error', error);	  
+	 	return done(null, false)
+		});
+		}
+		else
+		return done(null, false) 
+  
+  }))
 
 
 app.use(express.urlencoded({ extended: true })) // needed to retrieve html form fields (it's a requirement of the local strategy)
@@ -315,34 +379,67 @@ app.post("/register", (req, res) => {
 
 })
 
-app.post('/login', 
-  passport.authenticate('username-password', { failureRedirect: '/login', session: false }), // we indicate that this endpoint must pass through our 'username-password' passport strategy, which we defined before
-  (req, res) => { 
+app.post('/login', (req, res, next) => {
+  passport.authenticate('username-password', { session: false }, (err, user, info) => {
+    if (user) {
     // This is what ends up in our JWT
-    const jwtClaims = {
-      sub: req.user.username,
-      iss: 'localhost:3000',
-      aud: 'localhost:3000',
-      exp: Math.floor(Date.now() / 1000) + 604800, // 1 week (7×24×60×60=604800s) from now
-      role: 'user', // just to show a private JWT field
+	    const jwtClaims = {
+	      sub: user.username,
+	      iss: 'localhost:3000',
+	      aud: 'localhost:3000',
+	      exp: Math.floor(Date.now() / 1000) + 604800, // 1 week (7×24×60×60=604800s) from now
+	      role: 'user', // just to show a private JWT field
+	    }
+
+	    // generate a signed json web token. By default the signing algorithm is HS256 (HMAC-SHA256), i.e. we will 'sign' with a symmetric secret
+	    const token = jwt.sign(jwtClaims, jwtSecret)
+
+	    // From now, just send the JWT directly to the browser. Later, you should send the token inside a cookie.
+	    //res.json(token)
+	    
+	    // And let us log a link to the jwt.io debugger, for easy checking/verifying:
+	    console.log(`Token sent. Debug at https://jwt.io/?value=${token}`)
+	    console.log(`Token secret (for verifying the signature): ${jwtSecret.toString('base64')}`)
+	    
+	    res.cookie('authcookie',token,{
+	    	httpOnly: true,
+	    	secure: true}) 
+	    return res.redirect('/');
+    } else {
+      // First strategy failed, try the second one
+      passport.authenticate('radius-authenticate', { session: false }, (err, user, info) => {
+        if (user) {
+	    // This is what ends up in our JWT
+	    const jwtClaims = {
+	      sub: user.username,
+	      iss: 'localhost:3000',
+	      aud: 'localhost:3000',
+	      exp: Math.floor(Date.now() / 1000) + 604800, // 1 week (7×24×60×60=604800s) from now
+	      role: 'user', // just to show a private JWT field
+	    }
+
+	    // generate a signed json web token. By default the signing algorithm is HS256 (HMAC-SHA256), i.e. we will 'sign' with a symmetric secret
+	    const token = jwt.sign(jwtClaims, jwtSecret)
+
+	    // From now, just send the JWT directly to the browser. Later, you should send the token inside a cookie.
+	    //res.json(token)
+	    
+	    // And let us log a link to the jwt.io debugger, for easy checking/verifying:
+	    console.log(`Token sent. Debug at https://jwt.io/?value=${token}`)
+	    console.log(`Token secret (for verifying the signature): ${jwtSecret.toString('base64')}`)
+	    
+	    res.cookie('authcookie',token,{
+	    	httpOnly: true,
+	    	secure: true}) 
+	    return res.redirect('/');
+        } else {
+		return res.redirect('/login')
+        }
+      })(req, res, next);
     }
+  })(req, res, next);
+});
 
-    // generate a signed json web token. By default the signing algorithm is HS256 (HMAC-SHA256), i.e. we will 'sign' with a symmetric secret
-    const token = jwt.sign(jwtClaims, jwtSecret)
-
-    // From now, just send the JWT directly to the browser. Later, you should send the token inside a cookie.
-    //res.json(token)
-    
-    // And let us log a link to the jwt.io debugger, for easy checking/verifying:
-    console.log(`Token sent. Debug at https://jwt.io/?value=${token}`)
-    console.log(`Token secret (for verifying the signature): ${jwtSecret.toString('base64')}`)
-    
-    res.cookie('authcookie',token,{
-    	httpOnly: true,
-    	secure: true}) 
-    return res.redirect('/');
-  }
-)
 
 app.use(function (err, req, res, next) {
   console.error(err.stack)
