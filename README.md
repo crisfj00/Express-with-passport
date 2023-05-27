@@ -1,2 +1,6 @@
 # Express-with-passport
-Dummy fortune teller using passport.js authentication middleware with strong key derivation, Oauth2 with github and OpenIDConnect.
+Dummy fortune teller using several passport.js authentication strategies:
+* Middleware with strong key derivation.
+* Oauth2 with GitHub.
+* OpenIDConnect with Google.
+* RADIUS with UPC realm (upc.edu).
