@@ -106,7 +106,6 @@ function checkToken (req, res, next) {
 	const authcookie = req.cookies.authcookie;
 
 	try{
-
 		const user = jwt.verify(authcookie,jwtSecret); 
 		req.user=user;
 		next();
@@ -179,11 +178,8 @@ passport.use('username-password', new LocalStrategy(
 				      }
 				      return done(null, user) // the first argument for done is the error, if any. In our case there is no error, and so we pass null. The object user will be added by the passport middleware to req.user and thus will be available there for the next middleware and/or the route handler 
 				    }
-				    else{
-				      	
-
-				    
-				    return done(null, false) }
+				    else
+					    return done(null, false) 
 				    // in passport returning false as the user object means that the authentication process failed. 
 
 			},function(error) { console.log(error) })
@@ -210,7 +206,6 @@ passport.use('radius-authenticate', new LocalStrategy(
   function (username, password, done) {
   
   	if(validateEmail(username)){
-  
   		  client.accessRequest({
 		  secret: process.env.RADIUS_SECRET,
 		  attributes: [
